@@ -1,3 +1,4 @@
+// components/dashboard/app-sidebar.tsx
 "use client"
 
 import {
@@ -13,6 +14,7 @@ import {
   ClipboardList,
   Award,
   MessageSquare,
+  UserCog,
 } from "lucide-react"
 
 import {
@@ -45,6 +47,11 @@ const menuItems = {
       title: "Students",
       url: "/admin/students",
       icon: Users,
+    },
+    {
+      title: "Users",
+      url: "/admin/users",        
+      icon: UserCog                 
     },
     {
       title: "Teachers",

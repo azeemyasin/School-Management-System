@@ -1,12 +1,12 @@
-"use client"
+// components/admin/add-student-modal.tsx
+"use client";
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { useState, useEffect } from "react";
+import type React from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -15,109 +15,123 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Loader2 } from "lucide-react"
-import { createClient } from "@/utils/supabase/client"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { createClient } from "@/utils/supabase/client";
 
 export function AddStudentModal() {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [classes, setClasses] = useState<any[]>([])
-  const [parents, setParents] = useState<any[]>([])
-  const router = useRouter()
-  const supabase = createClient()
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [parents, setParents] = useState<any[]>([]);
+  const router = useRouter();
+  const supabase = createClient();
 
   const [formData, setFormData] = useState({
     email: "",
     fullName: "",
+    password: "",
     studentId: "",
     classId: "",
     parentId: "",
     dateOfBirth: "",
     emergencyContact: "",
     medicalInfo: "",
-  })
+  });
 
   useEffect(() => {
     if (open) {
-      fetchClasses()
-      fetchParents()
+      fetchClasses();
+      fetchParents();
     }
-  }, [open])
+  }, [open]);
 
   const fetchClasses = async () => {
-    const { data } = await supabase.from("classes").select("*").order("grade_level")
-    setClasses(data || [])
-  }
+    const { data } = await supabase
+      .from("classes")
+      .select("*")
+      .order("grade_level");
+    setClasses(data || []);
+  };
 
   const fetchParents = async () => {
-    const { data } = await supabase.from("users").select("*").eq("role", "parent")
-    setParents(data || [])
-  }
+    const { data } = await supabase
+      .from("users")
+      .select("*")
+      .eq("role", "parent");
+    setParents(data || []);
+  };
 
+  // Submit handler calls API route instead of Supabase Admin SDK
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
 
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password: "student123", // Default password
-        email_confirm: true,
-        user_metadata: {
-          full_name: formData.fullName,
-          role: "student",
-        },
-      })
+      const payload = {
+        email: formData.email.trim(),
+        fullName: formData.fullName.trim(),
+        password: formData.password,
+        studentId: formData.studentId.trim(),
+        classId: formData.classId || "",
+        parentId: formData.parentId || "",
+        dateOfBirth: formData.dateOfBirth || "",
+        emergencyContact: formData.emergencyContact || "",
+        medicalInfo: formData.medicalInfo || "",
+      };
 
-      if (authError) throw authError
+      // Send form data to our /api/students route
+      const res = await fetch("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      // Create user profile
-      const { error: userError } = await supabase.from("users").insert({
-        id: authData.user.id,
-        email: formData.email,
-        full_name: formData.fullName,
-        role: "student",
-      })
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok)
+        throw new Error(json.error ?? `Request failed (${res.status})`);
 
-      if (userError) throw userError
-
-      // Create student record
-      const { error: studentError } = await supabase.from("students").insert({
-        user_id: authData.user.id,
-        student_id: formData.studentId,
-        class_id: formData.classId,
-        parent_id: formData.parentId || null,
-        date_of_birth: formData.dateOfBirth,
-        emergency_contact: formData.emergencyContact,
-        medical_info: formData.medicalInfo,
-      })
-
-      if (studentError) throw studentError
-
-      toast.success("Student added successfully!")
-      setOpen(false)
+      toast.success("Student added successfully!");
+      setOpen(false);
       setFormData({
         email: "",
         fullName: "",
+        password: "",
         studentId: "",
         classId: "",
         parentId: "",
         dateOfBirth: "",
         emergencyContact: "",
         medicalInfo: "",
-      })
-      router.refresh()
+      });
+      router.refresh();
     } catch (error: any) {
-      toast.error(error.message || "Failed to add student")
+      toast.error(error.message || "Failed to add student");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
+  // if (!formData.password || formData.password.length < 6) {
+  //   toast.error("Password must be at least 6 characters");
+  //   setLoading(false);
+  //   return;
+  // }
+  // if (!formData.email.includes("@")) {
+  //   toast.error("Enter a valid email");
+  //   setLoading(false);
+  //   return;
+  // }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -130,7 +144,9 @@ export function AddStudentModal() {
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Add New Student</DialogTitle>
-          <DialogDescription>Create a new student account and profile.</DialogDescription>
+          <DialogDescription>
+            Create a new student account and profile.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
@@ -140,7 +156,9 @@ export function AddStudentModal() {
                 <Input
                   id="fullName"
                   value={formData.fullName}
-                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, fullName: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -150,7 +168,9 @@ export function AddStudentModal() {
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -161,7 +181,9 @@ export function AddStudentModal() {
                 <Input
                   id="studentId"
                   value={formData.studentId}
-                  onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, studentId: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -171,7 +193,9 @@ export function AddStudentModal() {
                   id="dateOfBirth"
                   type="date"
                   value={formData.dateOfBirth}
-                  onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, dateOfBirth: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -180,14 +204,16 @@ export function AddStudentModal() {
                 <Label htmlFor="classId">Class</Label>
                 <Select
                   value={formData.classId}
-                  onValueChange={(value) => setFormData({ ...formData, classId: value })}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, classId: value })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a class" />
                   </SelectTrigger>
                   <SelectContent>
                     {classes.map((cls) => (
-                      <SelectItem key={cls.id} value={cls.id}>
+                      <SelectItem key={cls.id} value={String(cls.id)}>
                         {cls.name} (Grade {cls.grade_level})
                       </SelectItem>
                     ))}
@@ -195,22 +221,16 @@ export function AddStudentModal() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="parentId">Parent (Optional)</Label>
-                <Select
-                  value={formData.parentId}
-                  onValueChange={(value) => setFormData({ ...formData, parentId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a parent" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {parents.map((parent) => (
-                      <SelectItem key={parent.id} value={parent.id}>
-                        {parent.full_name} ({parent.email})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  required
+                />
               </div>
             </div>
             <div className="space-y-2">
@@ -218,7 +238,9 @@ export function AddStudentModal() {
               <Input
                 id="emergencyContact"
                 value={formData.emergencyContact}
-                onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, emergencyContact: e.target.value })
+                }
                 placeholder="Emergency contact information"
               />
             </div>
@@ -227,13 +249,19 @@ export function AddStudentModal() {
               <Textarea
                 id="medicalInfo"
                 value={formData.medicalInfo}
-                onChange={(e) => setFormData({ ...formData, medicalInfo: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, medicalInfo: e.target.value })
+                }
                 placeholder="Any medical conditions or allergies"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
@@ -244,5 +272,5 @@ export function AddStudentModal() {
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
