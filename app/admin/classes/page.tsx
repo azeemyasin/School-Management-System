@@ -1,26 +1,30 @@
-import { requireRole } from "@/lib/auth"
-import { createClient } from "@/utils/supabase/server"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Plus, Users, BookOpen, Edit, Trash2 } from "lucide-react"
-import { AddClassModal } from "@/components/admin/add-class-modal"
+// app/admin/classes/page.tsx
+
+import { requireRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/utils/supabase/admin";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Users, BookOpen } from "lucide-react";
+import ClassCardActions from "@/components/admin/class-card-actions";
+import Link from "next/link";
 
 export default async function ClassesPage() {
-  const user = await requireRole(["admin"])
-  const supabase = await createClient()
+  await requireRole(["admin"]);
 
-  const { data: classes } = await supabase
+  const { data: classes, error } = await supabaseAdmin
     .from("classes")
     .select(`
       *,
+      class_teacher:class_teacher_id ( id, users ( full_name ) ),
       students(count),
       teacher_subjects(
         teachers(users(full_name)),
         subjects(name)
       )
     `)
-    .order("grade_level")
+    .order("grade_level");
+
+  if (error) console.error("Classes fetch error:", error.message);
 
   return (
     <div className="space-y-6">
@@ -29,22 +33,23 @@ export default async function ClassesPage() {
           <h1 className="text-3xl font-bold">Classes</h1>
           <p className="text-muted-foreground">Manage class structure and organization</p>
         </div>
-        <AddClassModal />
+        {/* “Add Class” button is inside the ClassCardActions for consistency? Keep your existing AddClassModal button if you prefer */}
+        <ClassCardActions mode="add" />
       </div>
 
-      {/* Classes Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {classes?.map((classItem) => (
-          <Card key={classItem.id} className="hover:shadow-lg transition-shadow">
+        {classes?.map((c: any) => (
+          <Card key={c.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-xl">{classItem.name}</CardTitle>
-                  <p className="text-sm text-muted-foreground">Grade {classItem.grade_level}</p>
+                  <CardTitle className="text-xl">{c.name}</CardTitle>
+                  <p className="text-sm text-muted-foreground">Grade {c.grade_level}</p>
                 </div>
-                <Badge variant="outline">Section {classItem.section}</Badge>
+                <Badge variant="outline">Section {c.section ?? "—"}</Badge>
               </div>
             </CardHeader>
+
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -53,43 +58,55 @@ export default async function ClassesPage() {
                     <span className="text-sm">Students</span>
                   </div>
                   <span className="font-semibold">
-                    {classItem.students?.[0]?.count || 0}/{classItem.capacity}
+                    {c.students?.[0]?.count || 0}
+                    {typeof c.capacity === "number" ? `/${c.capacity}` : ""}
                   </span>
                 </div>
 
+                {/* Subjects & Teachers block — SINGLE place where Class Teacher is printed */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-green-600" />
-                    <span className="text-sm font-medium">Subjects & Teachers</span>
+                    <span className="text-sm font-medium">Subjects &amp; Teachers</span>
                   </div>
+
+                  {/* Class teacher line */}
+                  <div className="text-xs bg-gray-50 p-2 rounded">
+                    <span className="font-medium">Class Teacher:</span>{" "}
+                    <span className="text-muted-foreground">
+                      {c.class_teacher?.users?.full_name ?? "Not assigned"}
+                    </span>
+                  </div>
+
+                  {/* Per-subject teacher list */}
                   <div className="space-y-1">
-                    {classItem.teacher_subjects?.map((assignment: any, index: number) => (
-                      <div key={index} className="text-xs bg-gray-50 p-2 rounded">
-                        <span className="font-medium">{assignment.subjects?.name}</span>
-                        <br />
-                        <span className="text-muted-foreground">
-                          {assignment.teachers?.users?.full_name || "No teacher assigned"}
-                        </span>
-                      </div>
-                    ))}
-                    {!classItem.teacher_subjects?.length && (
+                    {c.teacher_subjects?.length ? (
+                      c.teacher_subjects.map((a: any, i: number) => (
+                        <div key={i} className="text-xs bg-gray-50 p-2 rounded">
+                          <span className="font-medium">{a.subjects?.name}</span>
+                          <br />
+                          <span className="text-muted-foreground">
+                            {a.teachers?.users?.full_name || "No teacher assigned"}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
                       <p className="text-xs text-muted-foreground">No subjects assigned</p>
                     )}
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" className="flex-1 bg-transparent">
-                    <Edit className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1 bg-transparent">
-                    View Details
-                  </Button>
-                  <Button variant="destructive" size="sm">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                {/* Buttons */}
+                <ClassCardActions
+                  mode="row"
+                  classId={c.id}
+                  initial={{
+                    name: c.name,
+                    gradeLevel: c.grade_level,
+                    section: c.section ?? "",
+                    classTeacherId: c.class_teacher?.id ?? "",
+                  }}
+                />
               </div>
             </CardContent>
           </Card>
@@ -97,17 +114,11 @@ export default async function ClassesPage() {
       </div>
 
       {!classes?.length && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Plus className="h-6 w-6 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No classes found</h3>
-            <p className="text-muted-foreground mb-4">Get started by creating your first class.</p>
-            <AddClassModal />
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-12 text-center">
+          <div className="text-muted-foreground mb-4">No classes found</div>
+          <ClassCardActions mode="add" />
+        </div>
       )}
     </div>
-  )
+  );
 }

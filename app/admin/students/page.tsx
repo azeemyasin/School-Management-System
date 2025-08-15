@@ -1,10 +1,9 @@
-// app/admin/students/page.tsx
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/utils/supabase/server";
+import { supabaseAdmin } from "@/utils/supabase/admin"; // ▼ use admin client
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Filter } from "lucide-react";
+import { Search, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AddStudentModal } from "@/components/admin/add-student-modal";
 import {
@@ -16,12 +15,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import StudentRowActions from "@/components/admin/student-row-actions";
+import PasswordCell from "@/components/admin/password-cell";
 
 export default async function StudentsPage() {
   await requireRole(["admin"]);
-  const supabase = await createClient();
 
-  const { data: students, error } = await supabase
+  // Use the service-role client on the server page to bypass RLS for admins
+  const { data: students, error } = await supabaseAdmin
     .from("students")
     .select(
       `
@@ -31,12 +31,18 @@ export default async function StudentsPage() {
       date_of_birth,
       emergency_contact,
       medical_info,
+      raw_password,
       users:user_id ( full_name, email ),
       classes ( name, grade_level ),
       parents:parent_id ( full_name, email )
     `
     )
     .order("created_at", { ascending: false });
+
+  if (error) {
+    // Optional: log or surface a small inline error
+    console.error("Failed to load students:", error.message);
+  }
 
   const rows = (students ?? []).map((s: any) => ({
     userId: s.user_id,
@@ -48,6 +54,7 @@ export default async function StudentsPage() {
     parentName: s.parents?.full_name ?? null,
     admittedAt: s.created_at,
     dob: s.date_of_birth,
+    rawPassword: s.raw_password ?? null,
   }));
 
   return (
@@ -98,6 +105,7 @@ export default async function StudentsPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Class</TableHead>
                 <TableHead>Admitted</TableHead>
+                <TableHead>Password</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -121,22 +129,11 @@ export default async function StudentsPage() {
                       ? new Date(r.admittedAt).toLocaleDateString()
                       : "—"}
                   </TableCell>
+                  <TableCell>
+                    <PasswordCell value={r.rawPassword} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <StudentRowActions userId={r.userId} />
-                    <form
-                      action={async () => {
-                        "use server";
-                        await fetch(
-                          `${
-                            process.env.NEXT_PUBLIC_BASE_URL ?? ""
-                          }/api/students/${r.userId}`,
-                          {
-                            method: "DELETE",
-                            // in dev, you can call relative fetch on client – but this is server component, so keep client delete in a small island if you prefer
-                          }
-                        );
-                      }}
-                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -154,8 +151,6 @@ export default async function StudentsPage() {
           </Table>
         </CardContent>
       </Card>
-
-      {/* (Optional) Keep your card view below, or remove it */}
     </div>
   );
 }

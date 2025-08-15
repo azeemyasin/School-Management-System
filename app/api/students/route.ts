@@ -8,7 +8,7 @@ export async function POST(req: Request) {
 
   const email = (body.email as string).trim().toLowerCase();
   const fullName = body.fullName as string;
-  const password = body.password as string;           // <- admin provided
+  const password = body.password as string;
   const studentId = body.studentId as string;
 
   const classId = toNull(body.classId);
@@ -16,9 +16,14 @@ export async function POST(req: Request) {
   const dateOfBirth = toNull(body.dateOfBirth);
   const emergencyContact = toNull(body.emergencyContact);
   const medicalInfo = toNull(body.medicalInfo);
+  const fee =
+    body.fee === null || typeof body.fee === "undefined"
+      ? null
+      : Number.isFinite(Number(body.fee))
+      ? Number(body.fee)
+      : null;
 
   try {
-    // 1) Try to create a fresh auth user
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -28,11 +33,12 @@ export async function POST(req: Request) {
 
     let userId = created?.user?.id;
 
-    // 2) If email already exists, link & reset password
     if (createErr) {
       if (/already been registered/i.test(createErr.message || "")) {
-        const { data: list, error: listErr } =
-          await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 100 });
+        const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+          page: 1,
+          perPage: 100,
+        });
         if (listErr || !list?.users?.length) throw createErr;
 
         const matchedUser = list.users.find((u: any) => u.email?.toLowerCase() === email);
@@ -50,16 +56,15 @@ export async function POST(req: Request) {
 
     if (!userId) throw new Error("Failed to resolve user id");
 
-    // 3) Upsert profile
     const { error: profileErr } = await supabaseAdmin
       .from("users")
       .upsert({ id: userId, email, full_name: fullName, role: "student" }, { onConflict: "id" });
     if (profileErr) throw profileErr;
 
-    // 4) Upsert student row (requires UNIQUE(user_id))
     const { error: studentErr } = await supabaseAdmin
       .from("students")
-      .upsert({
+      .upsert(
+        {
           user_id: userId,
           student_id: studentId,
           class_id: classId,
@@ -68,6 +73,7 @@ export async function POST(req: Request) {
           emergency_contact: emergencyContact,
           medical_info: medicalInfo,
           raw_password: password,
+          fee, // NEW
         },
         { onConflict: "user_id" }
       );

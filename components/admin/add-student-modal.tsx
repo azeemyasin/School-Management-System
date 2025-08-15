@@ -1,4 +1,3 @@
-// components/admin/add-student-modal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -23,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
@@ -31,6 +30,7 @@ import { createClient } from "@/utils/supabase/client";
 export function AddStudentModal() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPW, setShowPW] = useState(false);
   const [classes, setClasses] = useState<any[]>([]);
   const [parents, setParents] = useState<any[]>([]);
   const router = useRouter();
@@ -46,6 +46,7 @@ export function AddStudentModal() {
     dateOfBirth: "",
     emergencyContact: "",
     medicalInfo: "",
+    fee: "", // NEW
   });
 
   useEffect(() => {
@@ -56,22 +57,15 @@ export function AddStudentModal() {
   }, [open]);
 
   const fetchClasses = async () => {
-    const { data } = await supabase
-      .from("classes")
-      .select("*")
-      .order("grade_level");
+    const { data } = await supabase.from("classes").select("*").order("grade_level");
     setClasses(data || []);
   };
 
   const fetchParents = async () => {
-    const { data } = await supabase
-      .from("users")
-      .select("*")
-      .eq("role", "parent");
+    const { data } = await supabase.from("users").select("*").eq("role", "parent");
     setParents(data || []);
   };
 
-  // Submit handler calls API route instead of Supabase Admin SDK
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
@@ -88,9 +82,9 @@ export function AddStudentModal() {
         dateOfBirth: formData.dateOfBirth || "",
         emergencyContact: formData.emergencyContact || "",
         medicalInfo: formData.medicalInfo || "",
+        fee: formData.fee === "" ? null : Number.parseFloat(formData.fee), // NEW
       };
 
-      // Send form data to our /api/students route
       const res = await fetch("/api/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -98,8 +92,7 @@ export function AddStudentModal() {
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok)
-        throw new Error(json.error ?? `Request failed (${res.status})`);
+      if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
 
       toast.success("Student added successfully!");
       setOpen(false);
@@ -113,6 +106,7 @@ export function AddStudentModal() {
         dateOfBirth: "",
         emergencyContact: "",
         medicalInfo: "",
+        fee: "",
       });
       router.refresh();
     } catch (error: any) {
@@ -121,17 +115,6 @@ export function AddStudentModal() {
       setLoading(false);
     }
   };
-
-  // if (!formData.password || formData.password.length < 6) {
-  //   toast.error("Password must be at least 6 characters");
-  //   setLoading(false);
-  //   return;
-  // }
-  // if (!formData.email.includes("@")) {
-  //   toast.error("Enter a valid email");
-  //   setLoading(false);
-  //   return;
-  // }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -148,6 +131,7 @@ export function AddStudentModal() {
             Create a new student account and profile.
           </DialogDescription>
         </DialogHeader>
+
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
             <div className="grid grid-cols-2 gap-4">
@@ -156,9 +140,7 @@ export function AddStudentModal() {
                 <Input
                   id="fullName"
                   value={formData.fullName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, fullName: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                   required
                 />
               </div>
@@ -168,22 +150,19 @@ export function AddStudentModal() {
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                 />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="studentId">Student ID</Label>
                 <Input
                   id="studentId"
                   value={formData.studentId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, studentId: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
                   required
                 />
               </div>
@@ -193,20 +172,17 @@ export function AddStudentModal() {
                   id="dateOfBirth"
                   type="date"
                   value={formData.dateOfBirth}
-                  onChange={(e) =>
-                    setFormData({ ...formData, dateOfBirth: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
                 />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="classId">Class</Label>
                 <Select
-                  value={formData.classId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, classId: value })
-                  }
+                  value={formData.classId || undefined} 
+                  onValueChange={(value) => setFormData({ ...formData, classId: value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a class" />
@@ -220,48 +196,67 @@ export function AddStudentModal() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Password with eye toggle */}
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                  required
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="password"
+                    type={showPW ? "text" : "password"}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowPW((v) => !v)}
+                    aria-label={showPW ? "Hide password" : "Show password"}
+                  >
+                    {showPW ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
+
+            {/* NEW: Fee row */}
+            <div className="space-y-2">
+              <Label htmlFor="fee">Fee</Label>
+              <Input
+                id="fee"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g., 1200.00"
+                value={formData.fee}
+                onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="emergencyContact">Emergency Contact</Label>
               <Input
                 id="emergencyContact"
                 value={formData.emergencyContact}
-                onChange={(e) =>
-                  setFormData({ ...formData, emergencyContact: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
                 placeholder="Emergency contact information"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="medicalInfo">Medical Information</Label>
               <Textarea
                 id="medicalInfo"
                 value={formData.medicalInfo}
-                onChange={(e) =>
-                  setFormData({ ...formData, medicalInfo: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, medicalInfo: e.target.value })}
                 placeholder="Any medical conditions or allergies"
               />
             </div>
           </div>
+
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>

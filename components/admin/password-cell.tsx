@@ -1,3 +1,5 @@
+// components/admin/password-cell.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -12,7 +14,7 @@ export default function PasswordCell({ value }: { value?: string | null }) {
     <button
       type="button"
       onClick={() => setShow((s) => !s)}
-      className="inline-flex items-center gap-2 text-sm"
+      className="inline-flex items-center gap-2 text-sm cursor-pointer"
       aria-label={show ? "Hide password" : "Show password"}
     >
       <span className="font-mono">{show ? value : "••••••••"}</span>

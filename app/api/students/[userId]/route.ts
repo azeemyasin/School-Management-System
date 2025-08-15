@@ -1,4 +1,3 @@
-// app/api/students/[userId]/route.ts
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/utils/supabase/admin";
 
@@ -11,11 +10,9 @@ export async function GET(
 ) {
   const userId = params.userId;
   try {
-    // Use service role so RLS never blocks this admin view
     const { data, error } = await supabaseAdmin
       .from("students")
-      .select(
-        `
+      .select(`
         user_id,
         student_id,
         class_id,
@@ -23,10 +20,10 @@ export async function GET(
         date_of_birth,
         emergency_contact,
         medical_info,
-        raw_password,   
+        raw_password,
+        fee,
         users:user_id ( full_name, email )
-      `
-      )
+      `)
       .eq("user_id", userId)
       .single();
 
@@ -40,32 +37,31 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  req: Request,
-  { params }: { params: { userId: string } }
-) {
+export async function PUT(req: Request, { params }: { params: { userId: string } }) {
   const userId = params.userId;
   const body = await req.json();
 
   const fullName = body.fullName as string | undefined;
   const email = (body.email as string | undefined)?.toLowerCase();
-  const password = body.password as string | undefined; // optional
+  const password = body.password as string | undefined;
   const studentId = body.studentId as string | undefined;
 
   const classId = body.classId !== undefined ? toNull(body.classId) : undefined;
-  const parentId =
-    body.parentId !== undefined ? toNull(body.parentId) : undefined;
-  const dateOfBirth =
-    body.dateOfBirth !== undefined ? toNull(body.dateOfBirth) : undefined;
+  const parentId = body.parentId !== undefined ? toNull(body.parentId) : undefined;
+  const dateOfBirth = body.dateOfBirth !== undefined ? toNull(body.dateOfBirth) : undefined;
   const emergencyContact =
-    body.emergencyContact !== undefined
-      ? toNull(body.emergencyContact)
-      : undefined;
-  const medicalInfo =
-    body.medicalInfo !== undefined ? toNull(body.medicalInfo) : undefined;
+    body.emergencyContact !== undefined ? toNull(body.emergencyContact) : undefined;
+  const medicalInfo = body.medicalInfo !== undefined ? toNull(body.medicalInfo) : undefined;
+  const fee =
+    body.fee === undefined
+      ? undefined
+      : body.fee === null
+      ? null
+      : Number.isFinite(Number(body.fee))
+      ? Number(body.fee)
+      : null;
 
   try {
-    // 1) Update Supabase Auth (password / email / metadata)
     if (password || email || fullName) {
       await supabaseAdmin.auth.admin.updateUserById(userId, {
         ...(password ? { password } : {}),
@@ -74,7 +70,6 @@ export async function PUT(
       });
     }
 
-    // 2) Update users profile row (email / full name)
     if (email || fullName) {
       const { error: uErr } = await supabaseAdmin
         .from("users")
@@ -86,7 +81,6 @@ export async function PUT(
       if (uErr) throw uErr;
     }
 
-    // 3) Update students row (including raw_password if a new password was provided)
     const studentUpdate: Record<string, any> = {};
     if (studentId !== undefined) studentUpdate.student_id = studentId;
     if (classId !== undefined) studentUpdate.class_id = classId;
@@ -94,8 +88,7 @@ export async function PUT(
     if (dateOfBirth !== undefined) studentUpdate.date_of_birth = dateOfBirth;
     if (emergencyContact !== undefined) studentUpdate.emergency_contact = emergencyContact;
     if (medicalInfo !== undefined) studentUpdate.medical_info = medicalInfo;
-
-    // only sync raw_password if a non-empty password was provided
+    if (fee !== undefined) studentUpdate.fee = fee; // NEW
     if (typeof password === "string" && password.trim().length > 0) {
       studentUpdate.raw_password = password;
     }
@@ -110,31 +103,17 @@ export async function PUT(
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e.message ?? "Failed to update student" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: e.message ?? "Failed to update student" }, { status: 400 });
   }
 }
 
-
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { userId: string } }
-) {
+export async function DELETE(_req: Request, { params }: { params: { userId: string } }) {
   const userId = params.userId;
   try {
-    // If FK is ON DELETE CASCADE from users -> students, you can skip the students delete.
-    const { error: sErr } = await supabaseAdmin
-      .from("students")
-      .delete()
-      .eq("user_id", userId);
+    const { error: sErr } = await supabaseAdmin.from("students").delete().eq("user_id", userId);
     if (sErr) throw sErr;
 
-    const { error: uErr } = await supabaseAdmin
-      .from("users")
-      .delete()
-      .eq("id", userId);
+    const { error: uErr } = await supabaseAdmin.from("users").delete().eq("id", userId);
     if (uErr) throw uErr;
 
     const { error: aErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
@@ -142,9 +121,6 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e.message ?? "Failed to delete student" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: e.message ?? "Failed to delete student" }, { status: 400 });
   }
 }
