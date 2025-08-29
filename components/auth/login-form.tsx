@@ -93,15 +93,6 @@ export function LoginForm() {
           <p>
             <strong>Admin:</strong> admin@school.com / admin123
           </p>
-          <p>
-            <strong>Teacher:</strong> teacher1@school.com / teacher123
-          </p>
-          <p>
-            <strong>Student:</strong> student@school.com / student123
-          </p>
-          <p>
-            <strong>Parent:</strong> parent@school.com / parent123
-          </p>
         </div>
       </div>
     </form>
